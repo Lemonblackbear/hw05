@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>存股北極熊：白熊 ETF 複利計算機</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入 FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f8ff; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        /* 自訂滑桿樣式 */
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
+        /* 白熊對話框動畫 */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        .bear-dialog { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 text-gray-800">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- 標題區 -->
+        <header class="text-center space-y-2">
+            <h1 class="text-3xl md:text-4xl font-black text-blue-800 tracking-wide">
+                <i class="fa-solid fa-snowflake text-blue-400 mr-2"></i>存股北極熊：白熊 ETF 複利計算機
+            </h1>
+            <p class="text-gray-600 font-medium">拖曳滑桿，讓白熊陪你算出未來的財富雪球！</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- 左側：參數控制面板 -->
+            <div class="lg:col-span-4 glass-panel p-6 rounded-2xl shadow-xl space-y-6">
+                <h2 class="text-xl font-bold text-gray-800 border-b pb-2"><i class="fa-solid fa-sliders mr-2"></i>投資設定</h2>
+                
+                <!-- 單筆投入 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="font-medium text-gray-700">單筆本金 (元)</label>
+                        <span id="valPrincipal" class="text-blue-600 font-bold">0</span>
+                    </div>
+                    <input type="range" id="rangePrincipal" min="0" max="1000000" step="10000" value="100000" class="w-full h-2 rounded-lg appearance-none bg-gray-200">
+                </div>
+
+                <!-- 每月定期定額 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="font-medium text-gray-700">每月定期定額 (元)</label>
+                        <span id="valMonthly" class="text-blue-600 font-bold">0</span>
+                    </div>
+                    <input type="range" id="rangeMonthly" min="0" max="100000" step="1000" value="10000" class="w-full h-2 rounded-lg appearance-none bg-gray-200">
+                </div>
+
+                <!-- 年化報酬率 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="font-medium text-gray-700">預期年化報酬率 (%)</label>
+                        <span id="valRate" class="text-blue-600 font-bold">0%</span>
+                    </div>
+                    <input type="range" id="rangeRate" min="1" max="20" step="0.5" value="6" class="w-full h-2 rounded-lg appearance-none bg-gray-200">
+                </div>
+
+                <!-- 投資年限 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="font-medium text-gray-700">投資年限 (年)</label>
+                        <span id="valYears" class="text-blue-600 font-bold">0年</span>
+                    </div>
+                    <input type="range" id="rangeYears" min="1" max="40" step="1" value="10" class="w-full h-2 rounded-lg appearance-none bg-gray-200">
+                </div>
+
+                <!-- 通膨開關 -->
+                <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-fire text-red-400"></i>
+                        <label class="font-medium text-gray-700">考慮 2% 通貨膨脹</label>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggleInflation" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 右側：結果展示與圖表 -->
+            <div class="lg:col-span-8 flex flex-col space-y-6">
+                <!-- 數據總覽卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-blue-500">
+                        <p class="text-sm text-gray-500 font-medium">總投入本金</p>
+                        <p class="text-2xl font-bold text-gray-800 mt-1" id="outPrincipal">$0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-green-500">
+                        <p class="text-sm text-gray-500 font-medium">累積投資報酬</p>
+                        <p class="text-2xl font-bold text-green-600 mt-1" id="outInterest">$0</p>
+                    </div>
+                    <div class="bg-blue-600 p-4 rounded-xl shadow-md text-white">
+                        <p class="text-sm text-blue-100 font-medium">期末總資產 <span id="lblInflation" class="text-xs text-yellow-300 hidden">(已扣除通膨)</span></p>
+                        <p class="text-3xl font-black mt-1" id="outTotal">$0</p>
+                    </div>
+                </div>
+
+                <!-- 白熊互動對話框 -->
+                <div class="flex items-start space-x-4 bg-white p-4 rounded-xl shadow-sm border border-blue-100 bear-dialog">
+                    <div class="text-5xl">🐻‍❄️</div>
+                    <div>
+                        <h3 class="font-bold text-blue-800 text-lg">白熊分析師：</h3>
+                        <p id="bearMessage" class="text-gray-700 mt-1 font-medium">設定好目標，白熊陪你一步一步存股，穩穩累積財富！💪</p>
+                    </div>
+                </div>
+
+                <!-- 圖表區 -->
+                <div class="glass-panel p-4 rounded-2xl shadow-xl flex-grow h-[350px] relative">
+                    <canvas id="growthChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素選取
+        const inputs = {
+            principal: document.getElementById('rangePrincipal'),
+            monthly: document.getElementById('rangeMonthly'),
+            rate: document.getElementById('rangeRate'),
+            years: document.getElementById('rangeYears'),
+            inflation: document.getElementById('toggleInflation')
+        };
+        const displays = {
+            principal: document.getElementById('valPrincipal'),
+            monthly: document.getElementById('valMonthly'),
+            rate: document.getElementById('valRate'),
+            years: document.getElementById('valYears')
+        };
+        const outputs = {
+            total: document.getElementById('outTotal'),
+            principal: document.getElementById('outPrincipal'),
+            interest: document.getElementById('outInterest')
+        };
+        const lblInflation = document.getElementById('lblInflation');
+        const bearMessage = document.getElementById('bearMessage');
+        
+        let chartInstance = null;
+
+        // 格式化金錢
+        const formatMoney = (num) => '$' + Math.round(num).toLocaleString('en-US');
+
+        // 更新白熊狀態
+        function updateBearVibe(rate, years, total, isInflationOn) {
+            let msg = "";
+            if (rate > 12) {
+                msg = "哇！這個報酬率設定有點高喔！高報酬伴隨高風險，白熊提醒你要注意市場波動，別讓我的魚被吃掉了！📉🐟";
+            } else if (years >= 20) {
+                msg = "長期投資是白熊的最愛！時間會是你最好的朋友，讓雪球越滾越大吧！❄️📈";
+            } else if (total > 10000000) {
+                msg = "突破千萬大關！千萬俱樂部達成！白熊為你準備好滿滿的鮭魚大餐慶祝了！🎉🍣";
+            } else if (isInflationOn) {
+                msg = "考慮了通膨因素，這才是真實的購買力！很棒的務實規劃，白熊給你按讚！👍🐻‍❄️";
+            } else {
+                msg = "不錯的起步！持續投入，白熊陪你一步一步穩穩累積財富！💪";
+            }
+            bearMessage.innerText = msg;
+        }
+
+        // 核心計算與圖表更新邏輯
+        function calculateAndUpdate() {
+            // 讀取數值
+            const p = parseFloat(inputs.principal.value);
+            const m = parseFloat(inputs.monthly.value);
+            const r = parseFloat(inputs.rate.value) / 100;
+            const y = parseInt(inputs.years.value);
+            const useInflation = inputs.inflation.checked;
+            const inflationRate = 0.02; // 2% 通膨
+
+            // 更新顯示標籤
+            displays.principal.innerText = formatMoney(p);
+            displays.monthly.innerText = formatMoney(m);
+            displays.rate.innerText = inputs.rate.value + '%';
+            displays.years.innerText = y + ' 年';
+            lblInflation.classList.toggle('hidden', !useInflation);
+
+            let chartLabels = [];
+            let chartPrincipalData = [];
+            let chartInterestData = [];
+
+            let currentTotal = p;
+            let currentPrincipal = p;
+
+            const monthlyRate = r / 12;
+
+            for (let year = 1; year <= y; year++) {
+                chartLabels.push(`第 ${year} 年`);
+                
+                for (let month = 1; month <= 12; month++) {
+                    currentTotal += m;
+                    currentTotal *= (1 + monthlyRate);
+                    currentPrincipal += m;
+                }
+
+                // 計算通膨扣除（計算實質購買力）
+                let displayTotal = currentTotal;
+                if (useInflation) {
+                    displayTotal = currentTotal / Math.pow(1 + inflationRate, year);
+                }
+
+                let currentInterest = displayTotal - currentPrincipal;
+                if(currentInterest < 0) currentInterest = 0; // 避免通膨吃掉本金顯示負利息
+
+                chartPrincipalData.push(Math.round(currentPrincipal));
+                chartInterestData.push(Math.round(currentInterest));
+            }
+
+            const finalPrincipal = currentPrincipal;
+            const finalTotal = chartPrincipalData[y-1] + chartInterestData[y-1];
+            const finalInterest = finalTotal - finalPrincipal;
+
+            // 更新結果卡片
+            outputs.principal.innerText = formatMoney(finalPrincipal);
+            outputs.interest.innerText = formatMoney(finalInterest);
+            outputs.total.innerText = formatMoney(finalTotal);
+
+            // 更新白熊狀態
+            updateBearVibe(parseFloat(inputs.rate.value), y, finalTotal, useInflation);
+
+            // 更新圖表
+            updateChart(chartLabels, chartPrincipalData, chartInterestData);
+        }
+
+        // 初始化/更新 Chart.js
+        function updateChart(labels, principalData, interestData) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            
+            if (chartInstance) {
+                chartInstance.data.labels = labels;
+                chartInstance.data.datasets[0].data = principalData;
+                chartInstance.data.datasets[1].data = interestData;
+                chartInstance.update();
+                return;
+            }
+
+            Chart.defaults.font.family = "'Noto Sans TC', sans-serif";
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '累積本金',
+                            data: principalData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)', // Blue
+                            stack: 'Stack 0',
+                        },
+                        {
+                            label: '複利孳息',
+                            data: interestData,
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)', // Green
+                            stack: 'Stack 0',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed.y !== null) {
+                                        label += formatMoney(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { 
+                            stacked: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if(value >= 10000) return (value/10000) + '萬';
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 綁定事件監聽器 (滑桿拖曳即時觸發)
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', calculateAndUpdate);
+        });
+
+        // 初始計算
+        calculateAndUpdate();
+    </script>
+</body>
+</html>
